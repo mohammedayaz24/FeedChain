@@ -8,7 +8,7 @@
 - **T. Mohammed Nabeel** – Backend Logic & API Integration  
 - **Mohammed Aasif** – Database Design & Workflow Logic  
 - **Mohammed Abuzar J** – Testing & Flow Validation  
-- **Abdul Gaffor Asjad** – Documentation & Demo Flow  
+- **Mohammed Aamir. T** – Documentation & Demo Flow  
 
 ---
 
