@@ -4,10 +4,10 @@ import { foodPosts } from '../api/client';
 import type { FoodPost } from '../api/client';
 
 const STATUS_LABEL: Record<string, string> = {
-  POSTED: 'Available',
-  CLAIMED: 'Claimed',
-  PICKED: 'Picked up',
-  CLOSED: 'Closed',
+  posted: 'Posted',
+  claimed: 'Claimed by NGO',
+  picked: 'Picked up',
+  distributed: 'Distributed',
 };
 
 export default function Donor() {

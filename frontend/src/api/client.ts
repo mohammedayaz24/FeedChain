@@ -37,7 +37,7 @@ function getInitialFoodPosts(): FoodPost[] {
       expiry_time: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
       pickup_lat: 12.9716,
       pickup_lng: 77.5946,
-      status: 'available',
+      status: 'posted',
       created_at: new Date().toISOString(),
     },
     {
@@ -48,8 +48,10 @@ function getInitialFoodPosts(): FoodPost[] {
       expiry_time: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(),
       pickup_lat: 12.9352,
       pickup_lng: 77.6245,
-      status: 'claimed',
+      status: 'picked',
       created_at: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+      claimed_at: new Date(Date.now() - 50 * 60 * 1000).toISOString(),
+      picked_at: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
     },
     {
       id: 'mock-post-3',
@@ -59,7 +61,7 @@ function getInitialFoodPosts(): FoodPost[] {
       expiry_time: new Date(Date.now() + 1 * 60 * 60 * 1000).toISOString(),
       pickup_lat: 13.0827,
       pickup_lng: 77.5033,
-      status: 'available',
+      status: 'posted',
       created_at: new Date(Date.now() - 120 * 60 * 1000).toISOString(),
     },
     {
@@ -70,8 +72,11 @@ function getInitialFoodPosts(): FoodPost[] {
       expiry_time: new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString(),
       pickup_lat: 12.9689,
       pickup_lng: 77.6348,
-      status: 'available',
-      created_at: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
+      status: 'distributed',
+      created_at: new Date(Date.now() - 180 * 60 * 1000).toISOString(),
+      claimed_at: new Date(Date.now() - 170 * 60 * 1000).toISOString(),
+      picked_at: new Date(Date.now() - 150 * 60 * 1000).toISOString(),
+      distributed_at: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
     },
   ];
 }
@@ -96,10 +101,8 @@ function getInitialClaims(): Claim[] {
       food_post_id: 'mock-post-2',
       ngo_id: 'ngo-demo-0000-0000-0000-0000000000000',
       status: 'picked',
-      claimed_at: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
+      claimed_at: new Date(Date.now() - 50 * 60 * 1000).toISOString(),
       picked_at: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
-      people_served: 25,
-      distribution_location: 'Community Center',
     },
     {
       id: 'mock-claim-2',
@@ -113,11 +116,16 @@ function getInitialClaims(): Claim[] {
       food_post_id: 'mock-post-4',
       ngo_id: 'ngo-demo-0000-0000-0000-0000000000000',
       status: 'distributed',
-      claimed_at: new Date(Date.now() - 120 * 60 * 1000).toISOString(),
-      picked_at: new Date(Date.now() - 110 * 60 * 1000).toISOString(),
+      claimed_at: new Date(Date.now() - 170 * 60 * 1000).toISOString(),
+      picked_at: new Date(Date.now() - 150 * 60 * 1000).toISOString(),
       distributed_at: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
-      people_served: 40,
-      distribution_location: 'Shelter A',
+      distribution_form: {
+        distribution_location: 'Shelter A - Downtown',
+        people_fed: 45,
+        distribution_date: new Date(Date.now() - 60 * 60 * 1000).toISOString().split('T')[0],
+        distribution_time: '14:30',
+        impact_note: 'Successfully distributed meals to 45 beneficiaries including families and individuals in need.',
+      },
     },
   ];
 }
@@ -145,11 +153,11 @@ export async function api<T>(
     if (path === '/food-posts/my') {
       const allPosts = getStorageFoodPosts();
       if (userRole === 'donor') {
-        // Donors see their own posts
+        // Donors see their own posts (all statuses)
         return allPosts.filter(p => p.donor_id === userId) as T;
       } else if (userRole === 'ngo') {
-        // NGOs see available posts
-        return allPosts.filter(p => p.status === 'available') as T;
+        // NGOs see posted posts (posted status)
+        return allPosts.filter(p => p.status === 'posted') as T;
       }
       return allPosts as T;
     }
@@ -157,7 +165,7 @@ export async function api<T>(
     // Handle /food-posts/nearby
     if (path.startsWith('/food-posts/nearby')) {
       const allPosts = getStorageFoodPosts();
-      return allPosts.filter(p => p.status === 'available') as T;
+      return allPosts.filter(p => p.status === 'posted') as T;
     }
 
     // Handle /food-posts/{id} create
@@ -171,7 +179,7 @@ export async function api<T>(
         expiry_time: body.expiry_time,
         pickup_lat: body.pickup_lat,
         pickup_lng: body.pickup_lng,
-        status: 'available',
+        status: 'posted',
         created_at: new Date().toISOString(),
       };
       const allPosts = getStorageFoodPosts();
@@ -210,8 +218,9 @@ export async function api<T>(
       const allPosts = getStorageFoodPosts();
       const post = allPosts.find(p => p.id === postId);
       
-      if (post) {
+      if (post && post.status === 'posted') {
         post.status = 'claimed';
+        post.claimed_at = new Date().toISOString();
         saveStorageFoodPosts(allPosts);
         
         const newClaim: Claim = {
@@ -228,7 +237,7 @@ export async function api<T>(
         
         return { message: 'Food post claimed successfully' } as T;
       }
-      throw new Error('Post not found');
+      throw new Error('Post not available for claiming');
     }
 
     // Handle /claims/{id}/pickup
@@ -237,13 +246,23 @@ export async function api<T>(
       const allClaims = getStorageClaims();
       const claim = allClaims.find(c => c.id === claimId);
       
-      if (claim) {
+      if (claim && claim.status === 'claimed') {
         claim.status = 'picked';
         claim.picked_at = new Date().toISOString();
+        
+        // Update post status
+        const allPosts = getStorageFoodPosts();
+        const post = allPosts.find(p => p.id === claim.food_post_id);
+        if (post) {
+          post.status = 'picked';
+          post.picked_at = new Date().toISOString();
+          saveStorageFoodPosts(allPosts);
+        }
+        
         saveStorageClaims(allClaims);
-        return { message: 'Claim picked successfully', otp_for_demo: '123456' } as T;
+        return { message: 'Food picked successfully', otp_for_demo: '123456' } as T;
       }
-      throw new Error('Claim not found');
+      throw new Error('Claim not in claimed state');
     }
 
     // Handle /claims/{id}/verify
@@ -251,29 +270,51 @@ export async function api<T>(
       return { message: 'OTP verified successfully' } as T;
     }
 
-    // Handle /claims/{id}/distribute
+    // Handle /claims/{id}/distribute - MANDATORY distribution form
     if (path.includes('/distribute') && options.method === 'POST') {
       const claimId = path.split('/')[2];
       const body = JSON.parse(options.body as string);
+      
+      // Validate required fields
+      if (!body.distribution_location || !body.people_fed) {
+        throw new Error('Distribution location and number of people fed are mandatory');
+      }
+      
       const allClaims = getStorageClaims();
       const claim = allClaims.find(c => c.id === claimId);
       
-      if (claim) {
+      if (claim && claim.status === 'picked') {
         claim.status = 'distributed';
         claim.distributed_at = new Date().toISOString();
-        claim.people_served = body.people_served;
-        claim.distribution_location = body.location;
+        claim.distribution_form = {
+          distribution_location: body.distribution_location,
+          people_fed: body.people_fed,
+          distribution_date: body.distribution_date || new Date().toISOString().split('T')[0],
+          distribution_time: body.distribution_time,
+          impact_note: body.impact_note,
+          proof_image: body.proof_image,
+        };
+        
+        // Update post status
+        const allPosts = getStorageFoodPosts();
+        const post = allPosts.find(p => p.id === claim.food_post_id);
+        if (post) {
+          post.status = 'distributed';
+          post.distributed_at = new Date().toISOString();
+          saveStorageFoodPosts(allPosts);
+        }
+        
         saveStorageClaims(allClaims);
         return { message: 'Distribution recorded successfully' } as T;
       }
-      throw new Error('Claim not found');
+      throw new Error('Claim not in picked state');
     }
 
     // Handle /impact/summary
     if (path === '/impact/summary') {
       const allClaims = getStorageClaims();
       const distributedClaims = allClaims.filter(c => c.status === 'distributed');
-      const peopleServed = distributedClaims.reduce((sum, c) => sum + (c.people_served || 0), 0);
+      const peopleServed = distributedClaims.reduce((sum, c) => sum + (c.distribution_form?.people_fed || 0), 0);
       const uniqueNgos = new Set(allClaims.map(c => c.ngo_id)).size;
       
       return {
@@ -354,20 +395,31 @@ export type FoodPost = {
   expiry_time: string;
   pickup_lat?: number;
   pickup_lng?: number;
-  status: string;
+  status: 'posted' | 'claimed' | 'picked' | 'distributed';
   created_at?: string;
+  claimed_at?: string;
+  picked_at?: string;
+  distributed_at?: string;
+};
+
+export type DistributionForm = {
+  distribution_location: string;
+  people_fed: number;
+  distribution_date?: string;
+  distribution_time?: string;
+  impact_note?: string;
+  proof_image?: string;
 };
 
 export type Claim = {
   id: string;
   food_post_id: string;
   ngo_id: string;
-  status: string;
+  status: 'claimed' | 'picked' | 'distributed';
   claimed_at: string;
   picked_at?: string;
   distributed_at?: string;
-  people_served?: number;
-  distribution_location?: string;
+  distribution_form?: DistributionForm;
   food_posts?: FoodPost | FoodPost[] | null;
 };
 
@@ -440,7 +492,7 @@ export const claims = {
 export const distribution = {
   distribute: (
     claimId: string,
-    body: { people_served: number; location?: string }
+    body: Partial<DistributionForm>
   ) =>
     api<{ message: string }>(`/claims/${claimId}/distribute`, {
       method: 'POST',

@@ -9,13 +9,12 @@ import {
   Clock,
 } from 'lucide-react';
 import { foodPosts, claims, distribution } from '../api/client';
-import type { FoodPost, Claim } from '../api/client';
+import type { FoodPost, Claim, DistributionForm } from '../api/client';
 
 const STATUS_LABEL: Record<string, string> = {
-  CLAIMED: 'Claimed – go pick up',
-  PICKED: 'Picked – mark distribution',
-  DISTRIBUTED: 'Distributed',
-  CANCELLED: 'Cancelled',
+  claimed: 'Claimed – go pick up',
+  picked: 'Picked – mark distribution',
+  distributed: 'Distributed',
 };
 
 function getPost(claim: Claim): FoodPost | null {
@@ -35,8 +34,13 @@ export default function Ngo() {
   const [verifyClaimId, setVerifyClaimId] = useState<string | null>(null);
   const [verifyOtp, setVerifyOtp] = useState('');
   const [distributeClaimId, setDistributeClaimId] = useState<string | null>(null);
-  const [peopleServed, setPeopleServed] = useState('');
-  const [distributeLocation, setDistributeLocation] = useState('');
+  const [distributeForm, setDistributeForm] = useState<Partial<DistributionForm>>({
+    distribution_location: '',
+    people_fed: undefined,
+    distribution_date: '',
+    distribution_time: '',
+    impact_note: '',
+  });
   const [pickupOtp, setPickupOtp] = useState<Record<string, string>>({});
 
   function loadNearby() {
@@ -117,23 +121,34 @@ export default function Ngo() {
   }
 
   function handleDistributeSubmit() {
-    if (!distributeClaimId || !peopleServed.trim()) return;
-    const num = parseInt(peopleServed, 10);
+    if (!distributeClaimId || !distributeForm.distribution_location?.trim() || distributeForm.people_fed == null) {
+      setError('Distribution location and number of people fed are mandatory');
+      return;
+    }
+    const num = Number(distributeForm.people_fed);
     if (Number.isNaN(num) || num < 1) {
-      setError('Enter a valid number of people served');
+      setError('Enter a valid number of people fed');
       return;
     }
     setError('');
     setActioning(distributeClaimId);
     distribution
       .distribute(distributeClaimId, {
-        people_served: num,
-        location: distributeLocation.trim() || undefined,
+        distribution_location: distributeForm.distribution_location.trim(),
+        people_fed: num,
+        distribution_date: distributeForm.distribution_date || undefined,
+        distribution_time: distributeForm.distribution_time || undefined,
+        impact_note: distributeForm.impact_note?.trim() || undefined,
       })
       .then(() => {
         setDistributeClaimId(null);
-        setPeopleServed('');
-        setDistributeLocation('');
+        setDistributeForm({
+          distribution_location: '',
+          people_fed: undefined,
+          distribution_date: '',
+          distribution_time: '',
+          impact_note: '',
+        });
         loadClaims();
       })
       .catch((e) => setError(e.message))
@@ -142,8 +157,13 @@ export default function Ngo() {
 
   function openDistribute(claimId: string) {
     setDistributeClaimId(claimId);
-    setPeopleServed('');
-    setDistributeLocation('');
+    setDistributeForm({
+      distribution_location: '',
+      people_fed: undefined,
+      distribution_date: new Date().toISOString().split('T')[0],
+      distribution_time: '',
+      impact_note: '',
+    });
   }
 
   return (
@@ -224,7 +244,7 @@ export default function Ngo() {
                       <Clock size={14} /> Expires {new Date(post.expiry_time).toLocaleString()}
                     </p>
                   )}
-                  {claim.status === 'CLAIMED' && (
+                  {claim.status === 'claimed' && (
                     <div className="claim-actions">
                       {otp && (
                         <div className="otp-hint">
@@ -280,7 +300,7 @@ export default function Ngo() {
                       </div>
                     </div>
                   )}
-                  {claim.status === 'PICKED' && (
+                  {claim.status === 'picked' && (
                     <div className="claim-actions">
                       <button
                         type="button"
@@ -292,30 +312,60 @@ export default function Ngo() {
                       </button>
                     </div>
                   )}
-                  {claim.status === 'DISTRIBUTED' && claim.people_served != null && (
-                    <p className="distributed-info">
-                      <CheckCircle size={16} /> Distributed · {claim.people_served} people served
-                      {claim.distribution_location && ` · ${claim.distribution_location}`}
-                    </p>
+                  {claim.status === 'distributed' && claim.distribution_form && (
+                    <div className="distributed-info">
+                      <CheckCircle size={16} /> Distributed · {claim.distribution_form.people_fed} people fed
+                      {claim.distribution_form.distribution_location && ` · ${claim.distribution_form.distribution_location}`}
+                      {claim.distribution_form.impact_note && (
+                        <p className="impact-note">{claim.distribution_form.impact_note}</p>
+                      )}
+                    </div>
                   )}
                   {isDistributeOpen && (
                     <div className="distribute-box">
                       <div className="form-group">
-                        <label>People served *</label>
+                        <label>Distribution Location *</label>
                         <input
-                          type="number"
-                          min={1}
-                          value={peopleServed}
-                          onChange={(e) => setPeopleServed(e.target.value)}
-                          placeholder="e.g. 50"
+                          value={distributeForm.distribution_location || ''}
+                          onChange={(e) => setDistributeForm({ ...distributeForm, distribution_location: e.target.value })}
+                          placeholder="e.g. Community center, shelter name"
+                          required
                         />
                       </div>
                       <div className="form-group">
-                        <label>Location (optional)</label>
+                        <label>Number of People Fed *</label>
                         <input
-                          value={distributeLocation}
-                          onChange={(e) => setDistributeLocation(e.target.value)}
-                          placeholder="e.g. Community center"
+                          type="number"
+                          min={1}
+                          value={distributeForm.people_fed || ''}
+                          onChange={(e) => setDistributeForm({ ...distributeForm, people_fed: e.target.value ? parseInt(e.target.value) : undefined })}
+                          placeholder="e.g. 50"
+                          required
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label>Distribution Date (optional)</label>
+                        <input
+                          type="date"
+                          value={distributeForm.distribution_date || ''}
+                          onChange={(e) => setDistributeForm({ ...distributeForm, distribution_date: e.target.value })}
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label>Distribution Time (optional)</label>
+                        <input
+                          type="time"
+                          value={distributeForm.distribution_time || ''}
+                          onChange={(e) => setDistributeForm({ ...distributeForm, distribution_time: e.target.value })}
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label>Impact Note (optional)</label>
+                        <textarea
+                          value={distributeForm.impact_note || ''}
+                          onChange={(e) => setDistributeForm({ ...distributeForm, impact_note: e.target.value })}
+                          placeholder="e.g. Distributed to families and individuals in need"
+                          rows={3}
                         />
                       </div>
                       <div className="btn-row">
@@ -323,7 +373,7 @@ export default function Ngo() {
                           Cancel
                         </button>
                         <button type="button" className="btn btn-primary btn-sm" onClick={handleDistributeSubmit} disabled={!!actioning}>
-                          {actioning === claim.id ? <Loader2 size={16} className="spin" /> : 'Submit'}
+                          {actioning === claim.id ? <Loader2 size={16} className="spin" /> : 'Submit Distribution'}
                         </button>
                       </div>
                     </div>
