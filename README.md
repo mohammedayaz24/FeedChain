@@ -4,9 +4,9 @@
 **CODE_AVENGERS**
 
 ## Team Members
+- **Mohammed Aasif** – Database Design & Presenter  
 - **Mohammed Ayaz A** – Backend Architecture & System Design  
 - **T. Mohammed Nabeel** – Backend Logic & API Integration  
-- **Mohammed Aasif** – Database Design & Workflow Logic  
 - **Mohammed Abuzar J** – Testing & Flow Validation  
 - **Mohammed Aamir. T** – Documentation & Demo Flow  
 
