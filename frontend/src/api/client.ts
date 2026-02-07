@@ -97,6 +97,13 @@ function getStorageClaims(): Claim[] {
 function getInitialClaims(): Claim[] {
   return [
     {
+      id: 'mock-claim-0',
+      food_post_id: 'mock-post-1',
+      ngo_id: 'ngo-demo-0000-0000-0000-0000000000000',
+      status: 'claimed',
+      claimed_at: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
+    },
+    {
       id: 'mock-claim-1',
       food_post_id: 'mock-post-2',
       ngo_id: 'ngo-demo-0000-0000-0000-0000000000000',

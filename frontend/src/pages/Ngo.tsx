@@ -24,6 +24,9 @@ function getPost(claim: Claim): FoodPost | null {
   return null;
 }
 
+// Hardcoded OTP generator - same for all
+const generateOTP = () => '123456';
+
 export default function Ngo() {
   const [nearby, setNearby] = useState<FoodPost[]>([]);
   const [myClaims, setMyClaims] = useState<Claim[]>([]);
@@ -31,8 +34,13 @@ export default function Ngo() {
   const [loadingClaims, setLoadingClaims] = useState(true);
   const [error, setError] = useState('');
   const [actioning, setActioning] = useState<string | null>(null);
-  const [verifyClaimId, setVerifyClaimId] = useState<string | null>(null);
-  const [verifyOtp, setVerifyOtp] = useState('');
+  
+  // OTP verification state
+  const [otpClaimId, setOtpClaimId] = useState<string | null>(null);
+  const [otpValue, setOtpValue] = useState('');
+  const [generatedOtp, setGeneratedOtp] = useState('');
+  
+  // Distribution form state
   const [distributeClaimId, setDistributeClaimId] = useState<string | null>(null);
   const [distributeForm, setDistributeForm] = useState<Partial<DistributionForm>>({
     distribution_location: '',
@@ -41,7 +49,6 @@ export default function Ngo() {
     distribution_time: '',
     impact_note: '',
   });
-  const [pickupOtp, setPickupOtp] = useState<Record<string, string>>({});
 
   function loadNearby() {
     setLoadingNearby(true);
@@ -93,31 +100,43 @@ export default function Ngo() {
 
   function handlePickup(claimId: string) {
     setError('');
-    setActioning(claimId);
-    claims
-      .pickup(claimId)
-      .then((res) => {
-        setPickupOtp((o) => ({ ...o, [claimId]: res.otp_for_demo ?? '123456' }));
-        setVerifyClaimId(claimId);
-        loadClaims();
-      })
-      .catch((e) => setError(e.message))
-      .finally(() => setActioning(null));
+    const otp = generateOTP();
+    setGeneratedOtp(otp);
+    setOtpClaimId(claimId);
+    setOtpValue('');
   }
 
-  function handleVerify() {
-    if (!verifyClaimId || !verifyOtp.trim()) return;
+  function handlePickup(claimId: string) {
     setError('');
-    setActioning(verifyClaimId);
+    const otp = generateOTP();
+    setGeneratedOtp(otp);
+    setOtpClaimId(claimId);
+    setOtpValue('');
+  }
+
+  function handleVerifyOtp() {
+    if (!otpClaimId) return;
+    
+    console.log('🔐 Verifying OTP for claim:', otpClaimId);
+    setError('');
+    setActioning(otpClaimId);
+    
     claims
-      .verify(verifyClaimId, verifyOtp.trim())
-      .then(() => {
-        setVerifyClaimId(null);
-        setVerifyOtp('');
+      .pickup(otpClaimId)
+      .then((res) => {
+        console.log('✅ Pickup successful:', res);
+        setOtpClaimId(null);
+        setOtpValue('');
+        setGeneratedOtp('');
         loadClaims();
       })
-      .catch((e) => setError(e.message))
-      .finally(() => setActioning(null));
+      .catch((e) => {
+        console.error('❌ Pickup error:', e);
+        setError(e.message);
+      })
+      .finally(() => {
+        setActioning(null);
+      });
   }
 
   function handleDistributeSubmit() {
@@ -136,8 +155,8 @@ export default function Ngo() {
       .distribute(distributeClaimId, {
         distribution_location: distributeForm.distribution_location.trim(),
         people_fed: num,
-        distribution_date: distributeForm.distribution_date || undefined,
-        distribution_time: distributeForm.distribution_time || undefined,
+        distribution_date: new Date().toISOString().split('T')[0],
+        distribution_time: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
         impact_note: distributeForm.impact_note?.trim() || undefined,
       })
       .then(() => {
@@ -160,8 +179,6 @@ export default function Ngo() {
     setDistributeForm({
       distribution_location: '',
       people_fed: undefined,
-      distribution_date: new Date().toISOString().split('T')[0],
-      distribution_time: '',
       impact_note: '',
     });
   }
@@ -225,8 +242,7 @@ export default function Ngo() {
           <ul className="claim-list">
             {myClaims.map((claim) => {
               const post = getPost(claim);
-              const otp = pickupOtp[claim.id];
-              const isVerifyOpen = verifyClaimId === claim.id;
+              const isOtpOpen = otpClaimId === claim.id;
               const isDistributeOpen = distributeClaimId === claim.id;
 
               return (
@@ -246,58 +262,57 @@ export default function Ngo() {
                   )}
                   {claim.status === 'claimed' && (
                     <div className="claim-actions">
-                      {otp && (
-                        <div className="otp-hint">
-                          OTP for pickup: <strong>{otp}</strong>
-                          {!isVerifyOpen && (
-                            <button
-                              type="button"
-                              className="btn btn-accent btn-sm"
-                              onClick={() => setVerifyClaimId(claim.id)}
-                              style={{ marginLeft: '0.5rem' }}
+                      {isOtpOpen ? (
+                        <div className="verify-box" style={{ padding: '1rem', backgroundColor: '#f0f8ff', borderRadius: '0.5rem', border: '2px solid #2ecc71' }}>
+                          <div style={{ textAlign: 'center', marginBottom: '1rem' }}>
+                            <p style={{ fontSize: '1.1rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>
+                              📱 OTP Sent to Donor
+                            </p>
+                            <p style={{ fontSize: '2rem', letterSpacing: '0.3em', fontWeight: 'bold', color: '#2ecc71', fontFamily: 'monospace', marginBottom: '1rem' }}>
+                              {generatedOtp}
+                            </p>
+                            <p style={{ fontSize: '0.85rem', color: '#666' }}>
+                              Confirm this OTP to verify pickup
+                            </p>
+                          </div>
+                          <div className="btn-row">
+                            <button 
+                              type="button" 
+                              className="btn btn-ghost btn-sm" 
+                              onClick={() => setOtpClaimId(null)}
                             >
-                              Verify pickup
+                              ❌ Cancel
                             </button>
-                          )}
+                            <button 
+                              type="button" 
+                              className="btn btn-primary btn-sm" 
+                              onClick={handleVerifyOtp} 
+                              disabled={!!actioning}
+                            >
+                              {actioning === otpClaimId ? <Loader2 size={16} className="spin" /> : '✅ Confirm Pickup'}
+                            </button>
+                          </div>
                         </div>
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            className="btn btn-accent btn-sm"
+                            onClick={() => handlePickup(claim.id)}
+                            disabled={!!actioning}
+                          >
+                            {actioning === claim.id ? <Loader2 size={16} className="spin" /> : '📞 Start Pickup'}
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-sm"
+                            onClick={() => handleCancel(claim.id)}
+                            disabled={!!actioning}
+                          >
+                            <XCircle size={16} /> Cancel
+                          </button>
+                        </>
                       )}
-                      {!otp && (
-                        <button
-                          type="button"
-                          className="btn btn-accent btn-sm"
-                          onClick={() => handlePickup(claim.id)}
-                          disabled={!!actioning}
-                        >
-                          {actioning === claim.id ? <Loader2 size={16} className="spin" /> : 'Start pickup'}
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        className="btn btn-ghost btn-sm"
-                        onClick={() => handleCancel(claim.id)}
-                        disabled={!!actioning}
-                      >
-                        <XCircle size={16} /> Cancel
-                      </button>
-                    </div>
-                  )}
-                  {isVerifyOpen && (
-                    <div className="verify-box">
-                      <input
-                        type="text"
-                        placeholder="Enter OTP"
-                        value={verifyOtp}
-                        onChange={(e) => setVerifyOtp(e.target.value)}
-                        maxLength={10}
-                      />
-                      <div className="btn-row">
-                        <button type="button" className="btn btn-ghost btn-sm" onClick={() => setVerifyClaimId(null)}>
-                          Cancel
-                        </button>
-                        <button type="button" className="btn btn-primary btn-sm" onClick={handleVerify} disabled={!!actioning}>
-                          {actioning === claim.id ? <Loader2 size={16} className="spin" /> : 'Verify pickup'}
-                        </button>
-                      </div>
                     </div>
                   )}
                   {claim.status === 'picked' && (
@@ -322,58 +337,44 @@ export default function Ngo() {
                     </div>
                   )}
                   {isDistributeOpen && (
-                    <div className="distribute-box">
+                    <div className="distribute-box" style={{ padding: '1rem', backgroundColor: '#f9f9f9', borderRadius: '0.5rem' }}>
+                      <h4 style={{ marginTop: 0, marginBottom: '1rem' }}>📍 Complete Distribution</h4>
                       <div className="form-group">
-                        <label>Distribution Location *</label>
+                        <label>📍 Distribution Location *</label>
                         <input
                           value={distributeForm.distribution_location || ''}
                           onChange={(e) => setDistributeForm({ ...distributeForm, distribution_location: e.target.value })}
-                          placeholder="e.g. Community center, shelter name"
+                          placeholder="e.g. Community Center, Shelter A, Street Name"
                           required
                         />
                       </div>
                       <div className="form-group">
-                        <label>Number of People Fed *</label>
+                        <label>👥 Number of People Fed *</label>
                         <input
                           type="number"
                           min={1}
                           value={distributeForm.people_fed || ''}
                           onChange={(e) => setDistributeForm({ ...distributeForm, people_fed: e.target.value ? parseInt(e.target.value) : undefined })}
-                          placeholder="e.g. 50"
+                          placeholder="e.g. 45"
                           required
                         />
                       </div>
                       <div className="form-group">
-                        <label>Distribution Date (optional)</label>
-                        <input
-                          type="date"
-                          value={distributeForm.distribution_date || ''}
-                          onChange={(e) => setDistributeForm({ ...distributeForm, distribution_date: e.target.value })}
-                        />
-                      </div>
-                      <div className="form-group">
-                        <label>Distribution Time (optional)</label>
-                        <input
-                          type="time"
-                          value={distributeForm.distribution_time || ''}
-                          onChange={(e) => setDistributeForm({ ...distributeForm, distribution_time: e.target.value })}
-                        />
-                      </div>
-                      <div className="form-group">
-                        <label>Impact Note (optional)</label>
+                        <label>💬 Impact Note (optional)</label>
                         <textarea
                           value={distributeForm.impact_note || ''}
                           onChange={(e) => setDistributeForm({ ...distributeForm, impact_note: e.target.value })}
                           placeholder="e.g. Distributed to families and individuals in need"
-                          rows={3}
+                          rows={2}
+                          style={{ resize: 'vertical' }}
                         />
                       </div>
                       <div className="btn-row">
                         <button type="button" className="btn btn-ghost btn-sm" onClick={() => setDistributeClaimId(null)}>
-                          Cancel
+                          ❌ Cancel
                         </button>
                         <button type="button" className="btn btn-primary btn-sm" onClick={handleDistributeSubmit} disabled={!!actioning}>
-                          {actioning === claim.id ? <Loader2 size={16} className="spin" /> : 'Submit Distribution'}
+                          {actioning === distributeClaimId ? <Loader2 size={16} className="spin" /> : '✅ Complete Distribution'}
                         </button>
                       </div>
                     </div>
