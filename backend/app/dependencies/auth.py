@@ -1,5 +1,6 @@
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from typing import Optional
 
 from app.core.security import decode_access_token
 
@@ -7,7 +8,7 @@ security = HTTPBearer(auto_error=False)
 
 
 def get_current_user(
-    credentials: HTTPAuthorizationCredentials | None = Depends(security),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)
 ):
     if not credentials:
         raise HTTPException(

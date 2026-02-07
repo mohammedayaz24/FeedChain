@@ -15,6 +15,12 @@ backend/__pycache__/
 backend/**/*.pyc
 
 # =====================
+# PYTHON (GLOBAL SAFETY)
+# =====================
+**/__pycache__/
+*.pyc
+
+# =====================
 # COMMON
 # =====================
 .env
